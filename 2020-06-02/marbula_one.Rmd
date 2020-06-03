@@ -1,0 +1,339 @@
+---
+title: "#tidytuesday 2020-06-02 Marbula One"
+author: "Mikel Madina"
+date: "1/6/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+knitr::opts_chunk$set(dev = "png", dev.args = list(type = "cairo-png"))
+```
+
+# Cargar elementos iniciales
+
+```{r}
+library(here)
+library(tidyverse)
+library(ggforce)
+library(ggtext)
+library(gganimate)
+library(extrafont)
+library(showtext)
+
+loadfonts(device = "win", quiet = TRUE)
+
+font_add_google(name = "Racing Sans One", family = "Racing Sans One")
+
+showtext_auto()
+```
+
+# Cargar datos del circuito.
+
+El circuito está codificado a mano a partir del plano que se puede ver en el vídeo [Marbula One: Midnight Bay GP Qualifying (S1Q8) - Marble Race by Jelle's Marble Runs](https://www.youtube.com/watch?v=CIevT1HJnCk)
+
+```{r}
+circuito <- read_csv(here("2020-06-02","data","circuito.csv"))
+```
+
+# Gráfico base (circuito)
+
+El gráfico base usa `geom_link()` y `geom_arc()` del paquete `ggforce()` para poder interpolar puntos de paso, especialmente en las curvas.
+
+La función `ggplot_build()` nos permite recoger los datos calculados por ggplot y sus stats.
+
+```{r}
+
+  p <- ggplot() +
+    geom_rect(
+      data = circuito %>%  filter(tipo == "rectangulo"),
+      aes(
+        xmin = xmin,
+        ymin = ymin,
+        xmax = xmax,
+        ymax = ymax,
+        fill = fill
+      )
+    ) +
+    geom_link(
+      data = circuito %>% filter(tipo == "recta"),
+      aes(
+        x = x,
+        y = y,
+        xend = xend,
+        yend = yend,
+        color = color
+      ),
+      size = 12,
+      n = 45
+    ) +
+    geom_arc(
+      data = circuito %>% filter(tipo == "curva"),
+      aes(
+        x0 = x0,
+        y0 = y0,
+        r = r,
+        start = start * pi,
+        end = end * pi,
+        color = color
+      ),
+      size = 12,
+      n = 90
+    ) +
+    geom_link(
+      data = circuito %>% filter(tipo == "recta"),
+      aes(
+        x = x,
+        y = y,
+        xend = xend,
+        yend = yend,
+        color = fill
+      ),
+      size = 10,
+      n = 45
+    ) +
+    geom_arc(
+      data = circuito %>% filter(tipo == "curva"),
+      aes(
+        x0 = x0,
+        y0 = y0,
+        r = r,
+        start = start * pi,
+        end = end * pi,
+        color = fill
+      ),
+      size = 10,
+      n = 90
+    ) +
+    geom_rect(
+      data = circuito %>%  filter(tipo == "rectangulo_sup"),
+      aes(
+        xmin = xmin,
+        ymin = ymin,
+        xmax = xmax,
+        ymax = ymax,
+        fill = fill
+      ),
+      alpha = 0.75
+    ) +
+    geom_circle(
+      data = circuito %>% filter(tipo == "label"),
+      aes(
+        x0 = x0,
+        y0 = y0,
+        r = r,
+        color = color
+      ),
+      fill = "black"
+    ) +
+    geom_text(
+      data = circuito %>% filter(tipo == "label"),
+      aes(
+        x = x,
+        y = y,
+        label = tramo,
+        color = color
+      )
+    ) +
+    scale_colour_identity(labels = c("Section 1", "Section 2", "Section 3")) +
+    scale_fill_identity()
+
+
+pg <- ggplot_build(p)
+
+```
+
+# Preparar datos de las canicas
+
+Los pasos más importantes consisten en:
+
+- Multiplicar los datos N veces; se ha seleccionado 49 porque es el doble del tiempo (en segundos, redondeado) de la canica ganadora.
+- Para cada canica, calcular:
+  - el número de paso
+  - velocidad (204 son el total de tramos en el que dividiremos el circuito más adelante)
+  - Punto de control en el que debería estar la canica en cada paso
+
+
+```{r}
+marbles <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-06-02/marbles.csv')
+
+canicas <- marbles %>%
+  filter(race == "S1Q8") %>%
+  select(marble_name, time_s) %>%
+  mutate(time_s = round((round(time_s, 1) * 2), 0),
+         velocidad = 204 / time_s) %>%
+  slice(rep(row_number(), 49)) %>%
+  arrange(marble_name) %>%
+  group_by(marble_name) %>%
+  mutate(
+    paso = row_number(),
+    punto_control = round((velocidad * paso), 0),
+    color = case_when(
+      marble_name == "Bolt" ~ "blue",
+      marble_name == "Clementin" ~ "darkorange",
+      marble_name == "Clutter" ~ "seagreen1",
+      marble_name == "Hazy" ~ "azure3",
+      marble_name == "Hive" ~ "darkgoldenrod4",
+      marble_name == "Mallard" ~ "limegreen",
+      marble_name == "Momo" ~ "darkolivegreen3",
+      marble_name == "Prim" ~ "chocolate2",
+      marble_name == "Rezzy" ~ "deeppink1",
+      marble_name == "Rojo Uno" ~ "darkorange",
+      marble_name == "Snowy" ~ "grey90",
+      marble_name == "Speedy" ~ "firebrick",
+      marble_name == "Starry" ~ "lightsteelblue1",
+      marble_name == "Sublime" ~ "chartreuse2",
+      marble_name == "Wospy" ~ "blue4",
+      marble_name == "Yellup" ~ "yellow",
+      TRUE ~ "ivory3"
+    )
+  )
+```
+
+# Calcular las coordenadas de cada tramo del circuito 
+
+Extraemos los datos calculados por ggforce y nos quedamos con cuatro puntos de control por cada tramo dibujado (los tramos tienen una longitud similar).
+
+Hay que hacerlo por separado para rectas y curvas, porque están almacenadas de forma distinta. Una vez caluladas, hay que y unir y ordenar todos los tramos.
+
+Identificamos los tramos de los pasos de control:
+
+- En el caso de las rectas es fácil, ya que podemos hacer una unión directa con los datos que ya tenemos.
+- En el caso de las curvas, he intentado varias formas para identificar correctamente los tramos de los puntos de control, pero finalmente he tenido que crear un mapeado manual para poder hacer la unión.
+
+```{r}
+# Obtenemos las posiciones x e y calculadas por ggplot
+# para rectas y nos quedamos con cuatro puntos por tramo
+
+datos_rectas_todo <- pg$data[[2]] %>%
+  filter(index == 0 |
+           index == 0.25 | index == 0.5 | index == 0.75) %>%
+  left_join(circuito, by = c("x" = "x", "y" = "y")) %>%
+  select(x, y, index, sector, tramo) %>%
+  fill(tramo, .direction = "down")
+
+# Obtenemos las posiciones x e y calculadas por ggplot
+# para curvas y nos quedamos con cuatro puntos por tramo
+
+datos_curvas_todo <- pg$data[[5]] %>%
+  filter(index == 0 |
+           (index > 0.25 &
+              index < 0.28) | index == 0.5 | (index > 0.72 & index < 0.73))
+
+# No podemos usar el mismo truco que con las rectas,
+# ya que circuitos tenemos el punto central, y en
+# pg$data tenemos el punto en el que se dibuja el arco.
+# Los he tenido que recoger a mano, no he conseguido que
+# funcionara de otra forma
+
+# cargamos el mapeo manual
+
+id_tramos <-
+  read_csv(
+    here("2020-06-02", "data", "union_curvas_grupos_tramos.csv"),
+    col_names = TRUE,
+    cols(group = col_character(),
+         tramo = col_character())
+  )
+# combinamos los datos
+
+datos_curvas_todo <- datos_curvas_todo %>%
+  left_join(id_tramos, by = "group") %>%
+  select(x, y, index, tramo)
+
+```
+
+Combinamos y ordenamos correctamente el dataset por puntos de control.
+
+```{r}
+# Combinamos y ordenamos puntos de rectas y curvas
+
+datos <- bind_rows(datos_rectas_todo, datos_curvas_todo, .id = "tipo") %>% 
+  select(tipo, tramo, index, x, y) %>%  
+  arrange(as.numeric(tramo), index) %>% 
+  mutate(tramo = as.numeric(tramo),
+         punto_control = row_number())
+```
+
+# Obtener coordenadas
+
+Combinamos los datos para añadir las coordenadas x/y a los puntos de paso de cada canica.
+
+```{r}
+# Combinamos todos los datos
+
+recorridos_canicas <- canicas %>% 
+  left_join(datos, by ="punto_control")
+
+```
+
+# Animación
+
+Antes de crear la animación tenemos que añadir los puntos que simularán las canicas, y que serán los elementos gráficos que se animarán.
+
+Usamos `geom_jitter()` para que las marcas no se solapen entre sí.
+
+```{r}
+
+options(gganimate.dev_args = list(res=105))
+
+anim <- p + geom_jitter(
+  data = recorridos_canicas,
+  aes(x = x, y = y, fill = color),
+  shape = 21,
+  size = 4,
+  color = "black",
+  width = 0.2,
+  height = 0.2
+) +
+  transition_states(
+    as.numeric(paso),
+    transition_length = 3,
+    state_length = 1,
+    wrap = FALSE
+  ) +
+  labs(title = "<span style='size: 1.25em'>Marbula One</span><br />&nbsp;&nbsp;&nbsp;Midnight Bay GP Qualifying (S1Q8)",
+       caption = "#tidytuesday 2020-06-02<br />design: @neregauzak<br />data: Jelle's Marble Runs / Randy Olson") +
+  theme_void() +
+  theme(
+    plot.title = element_markdown(
+      family = "Racing Sans One",
+      color = "white",
+      size = 20,
+      lineheight = 1.25,
+      margin = margin(
+        t = 0,
+        r = 15,
+        b = 20,
+        l = 15
+      )
+    ),
+    plot.caption = element_markdown(
+      family = "Calibri Light",
+      color = "white",
+      size = 8,
+      lineheight = 1.75,
+      hjust = 0.95,
+      margin = margin(
+        t = 10,
+        r = 15,
+        b = 10,
+        l = 15
+      )
+    ),
+    plot.background = element_rect(fill = rgb(0.043, 0.047, 0.043))
+  )
+
+animate(anim, nframes = 200, start_pause = 10, end_pause = 20, width = 1250, height = 800)
+
+anim_save("marbula_one_S1Q8.gif", animation = last_animation(), path = here("2020-06-02", "img"))
+
+```
+
+# Recursos consultados
+
+- [ggforce reference](https://ggforce.data-imaginist.com/reference/index.html)
+- [The R Graph Gallery: "An overview of color names in R"](https://www.r-graph-gallery.com/42-colors-names)
+- [Stack Overflor: "Extract data from a ggplot"](https://stackoverflow.com/a/25381297)
+- [Stack Overflow: "Repeat rows of a data.frame N times"](https://stackoverflow.com/a/8753732)
+
