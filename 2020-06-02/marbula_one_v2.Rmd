@@ -1,0 +1,330 @@
+---
+title: "#tidytuesday 2020-06-02 Marbula One"
+author: "Mikel Madina"
+date: "1/6/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+knitr::opts_chunk$set(dev = "png", dev.args = list(type = "cairo-png"))
+```
+
+# Cargar elementos iniciales
+
+```{r}
+library(here)
+library(tidyverse)
+library(ggforce)
+library(ggtext)
+library(gganimate)
+library(extrafont)
+library(showtext)
+
+loadfonts(device = "win", quiet = TRUE)
+
+font_add_google(name = "Racing Sans One", family = "Racing Sans One")
+
+showtext_auto()
+```
+
+# Cargar datos del circuito.
+
+El circuito está codificado a mano a partir del plano que se puede ver en el vídeo [Marbula One: Midnight Bay GP Qualifying (S1Q8) - Marble Race by Jelle's Marble Runs](https://www.youtube.com/watch?v=CIevT1HJnCk)
+
+```{r}
+circuito <- read_csv(here("2020-06-02","data","circuito.csv"))
+```
+
+# Gráfico base (circuito)
+
+El gráfico base usa `geom_link()` y `geom_arc()` del paquete `ggforce()` para poder interpolar puntos de paso, especialmente en las curvas.
+
+La función `ggplot_build()` nos permite recoger los datos calculados por ggplot y sus stats.
+
+```{r}
+p <- ggplot() +
+  # capa con rectángulos grises
+    geom_rect(
+      data = circuito %>%  filter(tipo == "rectangulo"),
+      aes(
+        xmin = xmin,
+        ymin = ymin,
+        xmax = xmax,
+        ymax = ymax,
+        fill = fill
+      )
+    ) +
+  # capa inferior con rectas de color
+  geom_link(
+      data = circuito %>% filter(tipo == "recta"),
+      aes(
+        x = x,
+        y = y,
+        xend = xend,
+        yend = yend,
+        color = color
+      ),
+      size = 12,
+      n = 45
+    ) +
+  # capa inferior con curvas de color
+  geom_arc(
+      data = circuito %>% filter(tipo == "curva"),
+      aes(
+        x0 = x0,
+        y0 = y0,
+        r = r,
+        start = start * pi,
+        end = end * pi,
+        color = color
+      ),
+      size = 12,
+      n = 90
+    ) +
+  # capa superior con rectas blancas
+  geom_link(
+      data = circuito %>% filter(tipo == "recta"),
+      aes(
+        x = x,
+        y = y,
+        xend = xend,
+        yend = yend,
+        color = fill
+      ),
+      size = 10,
+      n = 45
+    ) +
+  # capa superior con curvas blancas
+  geom_arc(
+      data = circuito %>% filter(tipo == "curva"),
+      aes(
+        x0 = x0,
+        y0 = y0,
+        r = r,
+        start = start * pi,
+        end = end * pi,
+        color = fill
+      ),
+      size = 10,
+      n = 90
+    ) +
+  # rectángulo azul que simula tramo acristalado
+  geom_rect(
+      data = circuito %>%  filter(tipo == "rectangulo_sup"),
+      aes(
+        xmin = xmin,
+        ymin = ymin,
+        xmax = xmax,
+        ymax = ymax,
+        fill = fill
+      ),
+      alpha = 0.75
+    ) +
+  # círculos para los códigos de las curvas
+  geom_circle(
+      data = circuito %>% filter(tipo == "label"),
+      aes(
+        x0 = x0,
+        y0 = y0,
+        r = r,
+        color = color
+      ),
+      fill = "black"
+    ) +
+  # textos con los códigos de las curvas
+  geom_text(
+      data = circuito %>% filter(tipo == "label"),
+      aes(
+        x = x,
+        y = y,
+        label = tramo,
+        color = color
+      )
+    ) +
+  # los colores están almacenados como nombres de color
+  # aceptados por R, por lo que usamos scale identity
+  scale_colour_identity() +
+    scale_fill_identity() +
+    labs(title = "<span style='size: 1.25em'>Marbula One</span><br />
+       &nbsp;&nbsp;&nbsp;Midnight Bay GP Qualifying (S1Q8)",
+       caption = "#tidytuesday 2020-06-02<br />
+       design: @neregauzak<br />
+       data: Jelle's Marble Runs / Randy Olson") +
+  theme_void() +
+  theme(
+    plot.title = element_markdown(
+      family = "Racing Sans One",
+      color = "white",
+      size = 20,
+      lineheight = 1.25,
+      margin = margin(
+        t = 25,
+        r = 15,
+        b = 20,
+        l = 15
+      )
+    ),
+    plot.caption = element_markdown(
+      family = "Calibri Light",
+      color = "white",
+      size = 8,
+      lineheight = 1.75,
+      hjust = 0.95,
+      margin = margin(
+        t = 10,
+        r = 15,
+        b = 10,
+        l = 15
+      )
+    ),
+    plot.background = element_rect(fill = rgb(0.043, 0.047, 0.043))
+  )
+  
+```
+
+# Calcular las coordenadas de cada tramo del circuito
+
+## Obtener datos de ggplot
+
+```{r}
+# almacenamos los datos calculados por ggplot/ggforce
+
+plot_data_rectas <- layer_data(p, i = 2)
+
+plot_data_curvas <- layer_data(p, i = 3)
+```
+
+## Calcular los puntos de control del circuito
+
+```{r}
+# Obtenemos las posiciones x e y calculadas por ggplot
+# para RECTAS y nos quedamos con cuatro puntos por tramo
+datos_rectas_todo <- plot_data_rectas %>%
+  filter(index == 0 |
+           index == 0.25 | index == 0.5 | index == 0.75)
+
+id_tramos_rectas <-
+  read_csv(
+    here("static", "data", "union_rectas_grupos_tramos.csv"),
+    col_names = TRUE,
+    cols(group = col_character(),
+         tramo = col_character())
+  )
+
+datos_rectas_todo <- datos_rectas_todo %>%
+  left_join(id_tramos_rectas, by = "group")
+
+# Obtenemos las posiciones x e y calculadas por ggplot
+# para CURVAS y nos quedamos con cuatro puntos por tramo
+datos_curvas_todo <- plot_data_curvas %>%
+  filter(index == 0 |
+           (index > 0.245 &
+              index < 0.28) | index == 0.5 | (index > 0.72 & index < 0.76))
+
+id_tramos_curvas <-
+  read_csv(
+    here("static", "data", "union_curvas_grupos_tramos.csv"),
+    col_names = TRUE,
+    cols(group = col_character(),
+         tramo = col_character())
+  )
+# combinamos los datos
+datos_curvas_todo <- datos_curvas_todo %>%
+  left_join(id_tramos_curvas, by = "group")
+
+# Combinamos y ordenamos puntos de rectas y curvas
+datos <- bind_rows(datos_rectas_todo, datos_curvas_todo, .id = "tipo") %>% 
+  select(tipo, tramo, index, x, y) %>%  
+  arrange(as.numeric(tramo), index) %>% 
+  mutate(tramo = as.numeric(tramo),
+         punto_control = row_number())
+```
+
+# Preparar datos de las canicas
+
+```{r}
+marbles <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-06-02/marbles.csv')
+
+canicas <- marbles %>%
+  filter(race == "S1Q8") %>%
+  select(marble_name, time_s) %>%
+  mutate(time_s = round((round(time_s, 1) * 4), 0),
+         velocidad = 204 / time_s) %>%
+  slice(rep(row_number(), 98)) %>%
+  arrange(marble_name) %>%
+  group_by(marble_name) %>%
+  mutate(
+    paso = row_number(),
+    punto_control = round((velocidad * paso), 0),
+    color = case_when(
+      marble_name == "Bolt" ~ "blue",
+      marble_name == "Clementin" ~ "darkorange",
+      marble_name == "Clutter" ~ "seagreen1",
+      marble_name == "Hazy" ~ "azure3",
+      marble_name == "Hive" ~ "darkgoldenrod4",
+      marble_name == "Mallard" ~ "limegreen",
+      marble_name == "Momo" ~ "darkolivegreen3",
+      marble_name == "Prim" ~ "chocolate2",
+      marble_name == "Rezzy" ~ "deeppink1",
+      marble_name == "Rojo Uno" ~ "darkorange",
+      marble_name == "Snowy" ~ "grey90",
+      marble_name == "Speedy" ~ "firebrick",
+      marble_name == "Starry" ~ "lightsteelblue1",
+      marble_name == "Sublime" ~ "chartreuse2",
+      marble_name == "Wospy" ~ "blue4",
+      marble_name == "Yellup" ~ "yellow",
+      TRUE ~ "ivory3"
+    )
+  )
+```
+
+# Calcular las coordenadas de cada tramo del circuito 
+
+
+```{r}
+# Combinamos todos los datos
+recorridos_canicas <- canicas %>% 
+  left_join(datos, by ="punto_control")
+
+```
+
+# Animación
+
+Antes de crear la animación tenemos que añadir los puntos que simularán las canicas, y que serán los elementos gráficos que se animarán.
+
+Usamos `geom_jitter()` para que las marcas no se solapen entre sí.
+
+```{r}
+
+options(gganimate.dev_args = list(res=105))
+
+anim <- p + geom_jitter(
+  data = recorridos_canicas,
+  aes(x = x, y = y, fill = color),
+  shape = 21,
+  size = 4,
+  color = "black",
+  width = 0.2,
+  height = 0.2
+) +
+  transition_states(
+    as.numeric(paso),
+    transition_length = 3,
+    state_length = 1,
+    wrap = FALSE
+  )
+  
+animate(anim, nframes = 392, start_pause = 10, end_pause = 20, width = 1250, height = 800)
+
+anim_save("marbula_one_S1Q8_2.gif", animation = last_animation(), path = here("static", "images", "marbula_one_S1Q8_2.gif"))
+
+```
+
+# Recursos consultados
+
+- [ggforce reference](https://ggforce.data-imaginist.com/reference/index.html)
+- [The R Graph Gallery: "An overview of color names in R"](https://www.r-graph-gallery.com/42-colors-names)
+- [Stack Overflor: "Extract data from a ggplot"](https://stackoverflow.com/a/25381297)
+- [Stack Overflow: "Repeat rows of a data.frame N times"](https://stackoverflow.com/a/8753732)
+
