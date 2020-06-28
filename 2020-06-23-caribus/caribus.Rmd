@@ -21,6 +21,7 @@ library(ggmap)
 # Composición y Animación
 library(gganimate)
 library(magick)
+library(ggtext)
 
 ```
 
@@ -94,7 +95,7 @@ tl_marca <- datos_validos %>%
 
 tl <- ggplot() +
   geom_line(
-    data = tl_studies,
+    data = tl_study,
     aes(
       time,
       fct_reorder(study_site, order),
@@ -104,7 +105,7 @@ tl <- ggplot() +
     size = 7.5
   ) +
   geom_text(
-    data = tl_studies %>% filter(momento == "inicio"),
+    data = tl_study %>% filter(momento == "inicio"),
     aes(x = inicio4label, y = study_site, label = study_site),
     color = "white",
     hjust = 0,
@@ -112,9 +113,9 @@ tl <- ggplot() +
     fontface = "bold",
     size = 4.5
   ) +
-  geom_vline(data = tl_marca, aes(xintercept = time4anim), color = "#eceff4") +
-  geom_point(data = tl_marca, aes(x = time4anim, y = -Inf), shape = 18, size = 5, color = "#eceff4") +
-  annotate("text", x = min(tl_studies$time), y = "Scott", label = "Colonia o manada",  color = "#eceff4", hjust = 0) +
+  geom_vline(data = tl_mark, aes(xintercept = time4anim), color = "#eceff4") +
+  geom_point(data = tl_mark, aes(x = time4anim, y = -Inf), shape = 18, size = 5, color = "#eceff4") +
+  annotate("text", x = min(tl_study$time) %m+% months(4), y = "Scott", label = "Colonia o manada", angle = 90, color = "#eceff4", hjust = 1) +
   scale_color_identity() +
   scale_x_date(breaks = "2 year", date_labels ="%Y") +
   theme_void() +
@@ -130,13 +131,13 @@ tl <- ggplot() +
 
 anim_tl <- tl +
   transition_states(states = time4anim, transition_length = 1, state_length = 2) +
-  labs(title="Áreas de movimiento de caribús por animal y estación del año",
+  labs(title="Áreas de movimiento de caribús\npor animal y estación del año",
        caption="<span style='color: #eceff4'>{closest_state}</span>")
 
 
-anim_tl <- animate(anim_tl, nframes = 500, height = 2.67, width = 5.34, units = "in", res = 150)
+anim_tl <- animate(anim_tl, nframes = 500, height = 450, width = 600, res = 150, start_pause = 15, end_pause = 30)
 
-anim_save("tl_anim.gif", anim = anim_tl, path="2020-06-23")
+anim_save("tl_anim_600.gif", anim = anim_tl, path="2020-06-23")
 
 ```
 
@@ -189,15 +190,15 @@ ggmap_bbox <- function(map) {
 # Use the function:
 sq_map <- ggmap_bbox(sq_map)
 
-areas_mapa <- ggmap(sq_map) +
+areas_mapa <- ggmap::ggmap(sq_map) +
   coord_sf(crs = st_crs(3857)) + # force it to be 3857
-  geom_sf(data = areas_caribus_sf, inherit.aes = FALSE, aes(fill = color, group = animal_id), alpha = 0.25) +
+  geom_sf(data = areas_bichos_sf, inherit.aes = FALSE, aes(fill = color, group = animal_id), alpha = 0.25) +
   labs(caption="#tidytuesday 2020-06-23\nData: Movebank\nDesign: @neregauzak") +
   guides(fill=FALSE) +
   scale_y_continuous(expand = c(0,0)) +
   scale_x_continuous(expand = c(0,0)) +
   scale_fill_identity() +
-  theme(plot.caption = element_text(face ="bold", size = 10, color = "#eceff4"),
+  theme(plot.caption = element_text(face ="bold", size = 14, color = "#eceff4"),
         axis.title.x = element_blank(),
         axis.text.x = element_text(color ="#eceff4"),
         axis.title.y = element_blank(),
@@ -208,7 +209,7 @@ areas_mapa <- ggmap(sq_map) +
 
 anim_areas_mapa <- areas_mapa + transition_states(estacion_mes, transition_length = 1, state_length = 2)
 
-anim_areas_mapa <- animate(anim_areas_mapa, nframes = 500, width = 800, height = 1036)
+anim_areas_mapa <- animate(anim_areas_mapa, nframes = 500, width = 600, height = 795, start_pause = 15, end_pause = 30)
 
 anim_save("mapa_areas.gif", animation = anim_areas_mapa, path = "2020-06-23")
 ```
@@ -233,9 +234,9 @@ new_gif # lleva más de 8 horas para cargar, me he aburrido y lo he dejado
 Código para Imagemagick en la línea de comandos de Windows.
 
 ```
-magick convert ( tl_anim.gif.gif -coalesce -set page %[w]x%[fx:h*3.59]+0+0 -coalesce ) ^
+magick convert ( tl_anim.gif. -coalesce -set page %[w]x%[fx:h*2.77]+0+0 -coalesce ) ^
   null: ( mapa_areas.gif -coalesce ) -gravity south -layers composite ^
-  -set delay 0 -loop 0 acb_tit_cap.gif
+  -set delay 0 -loop 0 tidytuesday_2020-06-23_600.gif
 
 ```
 
