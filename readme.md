@@ -1,6 +1,6 @@
-### 2020-06-23 Caribús
+### 2020-06-23 Caribús (versión estática)
 
-![](http://mikelmadina.com/images/tidytuesday_2020-06-23_600.gif)
+![](2020-06-23-caribus/img/combinado.png)
 
 ### 2020-06-02 Marbula One (v2)
 

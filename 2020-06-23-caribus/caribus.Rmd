@@ -32,16 +32,287 @@ locations <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/
 
 ```
 
-# Limpieza inicial
+# Versión estática
 
 ```{r}
 estudios <- c(unique(locations$study_site))
-colores <- c("#5f86b7", "#410458", "#fa79f5", "#b00091", "#ca8ab0", "#3f436d", "#8184fb", "#01102c")
+colores <-
+  c(
+    "#bf616a",
+    "#88c0d0",
+    "#d08770",
+    "#d8dee9",
+    "#ebcb8b",
+    "#b48ead",
+    "#a3be8c",
+    "#4c566a"
+  )
 
 paleta <- bind_cols(study_site = estudios, color = colores)
 
-# Hay un corte temporal en los datos
-# Nos quedamos con datos de 2000 en adelante
+datos_validos <- locations %>%
+  mutate(anyo = as_date(floor_date(timestamp, "year"))) %>%
+  left_join(paleta)
+```
+
+## Línea temporal
+
+```{r}
+tl_study <- datos_validos %>%
+  group_by(study_site) %>%
+  summarise(
+    inicio = as_date(min(timestamp)),
+    final = as_date(max(timestamp)),
+    inicio4label = inicio %m+% months(6),
+    color = unique(color)
+  ) %>%
+  arrange(inicio) %>%
+  mutate(order = row_number()) %>%
+  pivot_longer(inicio:final, names_to = "momento", values_to = "time") %>%
+  ungroup()
+
+tl_mark <- datos_validos %>%
+  group_by(anyo) %>%
+  summarise() %>%
+  rename(time = anyo) %>%
+  mutate(time4anim = time)
+
+fecha_muestra <- ymd("2010-01-01")
+
+no_data_years <- 1993:2000
+y <- rep(Inf, times = 8)
+
+missing_years <- tibble(x = as_date(parse_date_time(no_data_years, "y")),
+                        y = y)
+
+tl <- ggplot() +
+  geom_line(
+    data = tl_study,
+    aes(
+      time,
+      fct_reorder(study_site, order),
+      group = study_site,
+      color = color
+    ),
+    size = 7.5
+  ) +
+  geom_text(
+    data = tl_study %>% filter(momento == "inicio"),
+    aes(x = inicio4label, y = study_site, label = study_site),
+    color = "#2e3440",
+    hjust = -0.018,
+    vjust = 0.5,
+    fontface = "bold",
+    size = 4
+  ) +
+  geom_text(
+    data = tl_study %>% filter(momento == "inicio"),
+    aes(x = inicio4label, y = study_site, label = study_site),
+    color = "white",
+    hjust = 0,
+    vjust = 0.4,
+    fontface = "bold",
+    size = 4
+  ) +
+  geom_vline(data = tl_mark,
+             aes(xintercept = fecha_muestra),
+             color = "#eceff4") +
+  geom_point(
+    data = tl_mark,
+    aes(x = fecha_muestra, y = -Inf),
+    shape = 18,
+    size = 5,
+    color = "#eceff4"
+  ) +
+  geom_rect(
+    data = missing_years,
+    aes(
+      xmin = min(x),
+      xmax = max(x),
+      ymin = -Inf,
+      ymax = Inf
+    ),
+    fill = "#2e3440",
+    color = "#434c5e"
+  ) +
+  annotate(
+    "text",
+    x = min(tl_study$time) %m+% months(4),
+    y = "Scott",
+    label = "Colonia o manada",
+    angle = 90,
+    color = "#eceff4",
+    hjust = 1
+  ) +
+  annotate(
+    "text",
+    label = "NO DATA",
+    color = "#434c5e",
+    x = ymd("2000-01-01"),
+    y = "Quintette",
+    hjust = 1.01,
+    size = 10
+  ) +
+  labs(
+    title = "Áreas de movimiento de caribús por animal y año",
+    caption = paste0("<span style='color: #eceff4'>", fecha_muestra, "</span>")
+  ) +
+  scale_color_identity() +
+  scale_x_date(breaks = "2 year", date_labels = "%Y") +
+  theme_void() +
+  theme(
+    plot.margin = margin(
+      t = .15,
+      r = 0.15,
+      b = .05,
+      l = .15,
+      unit = "in"
+    ),
+    plot.title = element_text(
+      margin = margin(b = 0.1, unit = "in"),
+      color = "#eceff4",
+      size = 20,
+      face = "bold",
+      hjust = 0.5
+    ),
+    plot.caption = element_markdown(
+      hjust = 0.5,
+      color = "#eceff4",
+      size = 14,
+      face = "bold"
+    ),
+    plot.background = element_rect(fill = "#2e3440"),
+    panel.background = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+ggsave(
+  "tl_1250.png",
+  plot = tl,
+  path = "2020-06-23",
+  units = "in",
+  dpi = 150,
+  width = 8.34,
+  height = 3,
+  device = "png"
+)
+
+```
+
+
+## Mapa
+
+```{r}
+areas_caribus_sf <- datos_validos %>%
+  group_by(animal_id, anyo) %>% 
+  mutate(n = n()) %>% 
+  ungroup() %>% 
+  filter(n > 3) %>% 
+  st_as_sf(coords = c("longitude","latitude"), crs = 4326) %>%
+  st_transform(crs = 3857) %>% 
+  group_by(animal_id, anyo, study_site, color) %>% 
+  summarise() %>% 
+  st_convex_hull() %>% 
+  ungroup() %>% 
+  st_as_sf()
+
+# https://stackoverflow.com/a/50844502  
+
+box <-
+  ggmap::make_bbox(lon = datos_validos$longitude,
+                   lat = datos_validos$latitude,
+                   f = 0.025)
+
+sq_map <-
+  ggmap::get_map(
+    location = box,
+    maptype = "terrain",
+    source = "stamen",
+    scale = 5
+  )
+
+ggmap_bbox <- function(map) {
+  if (!inherits(map, "ggmap"))
+    stop("map must be a ggmap object")
+  # Extract the bounding box (in lat/lon) from the ggmap to a numeric vector,
+  # and set the names to what sf::st_bbox expects:
+  map_bbox <- setNames(unlist(attr(map, "bb")),
+                       c("ymin", "xmin", "ymax", "xmax"))
+  
+  # Coonvert the bbox to an sf polygon, transform it to 3857,
+  # and convert back to a bbox (convoluted, but it works)
+  bbox_3857 <-
+    st_bbox(st_transform(st_as_sfc(st_bbox(map_bbox, crs = 4326)), 3857))
+  
+  # Overwrite the bbox of the ggmap object with the transformed coordinates
+  attr(map, "bb")$ll.lat <- bbox_3857["ymin"]
+  attr(map, "bb")$ll.lon <- bbox_3857["xmin"]
+  attr(map, "bb")$ur.lat <- bbox_3857["ymax"]
+  attr(map, "bb")$ur.lon <- bbox_3857["xmax"]
+  map
+}
+
+# Use the function:
+sq_map <- ggmap_bbox(sq_map)
+
+areas_mapa <- ggmap::ggmap(sq_map) +
+  coord_sf(crs = st_crs(3857)) + # force it to be 3857
+  geom_sf(
+    data = areas_caribus_sf,
+    aes(fill = color),
+    inherit.aes = FALSE,
+    alpha = 0.25
+  ) +
+  labs(caption = "#tidytuesday 2020-06-23\nData: Movebank\nDesign: @neregauzak") +
+  guides(fill = FALSE) +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_fill_identity() +
+  theme(
+    plot.caption = element_text(face = "bold", size = 14, color = "#eceff4"),
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(color = "#eceff4"),
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    plot.margin = margin(0, 0.15, 0.15, 0.15, "in"),
+    plot.background = element_rect(fill = "#2e3440")
+  )
+
+ggsave(
+  "mapa_1250.png",
+  plot = areas_mapa,
+  path = "2020-06-23",
+  units = "in",
+  dpi = 150,
+  width = 8.34,
+  height = 15.4,
+  device = "png"
+)
+
+```
+
+## Combinar las imágenes
+
+```{r}
+timeline <- image_read("2020-06-23/tl_1250.png")
+mapa <- image_read("2020-06-23/mapa_1250.png")
+
+combinado <- image_append(c(timeline, mapa), stack = TRUE)
+
+image_write(combinado, path = "2020-06-23/combinado.png")
+
+```
+
+
+# Versión animada
+
+## Limpieza inicial
+
+```{r}
 
 datos_validos <- locations %>% 
   filter(date(timestamp) > ymd("2000-01-01")) %>% 
