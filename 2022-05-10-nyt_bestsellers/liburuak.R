@@ -342,68 +342,22 @@ liburuak_top10_astero_all <- liburuak_top10_astero_all %>%
 ###################################################
 
 oharrak <- tribble(
-  ~ id_f,
-  ~ week,
-  ~ rank,
-  ~ testua,
-  ~ hjust,
-  7239,
-  ymd("2022-09-01") + weeks(30),
-  1,
-  "Zer ekarriko du etorkizunak?<br />
+  ~ id_f, ~ week, ~ rank, ~ testua, ~ hjust,
+  7239, ymd("2022-09-01") + weeks(30), 1, "Zer ekarriko du etorkizunak?<br />
   2022ko uztailean ***<span style='color: #fca16c'>Where the Crawdads sing</span>*** filma estreinatuko dute.<br />
   Beste hainbat liburuen kasuan, filmari esker liburuak berriro salduenen zerrendan agertu dira.<br />
-  Baina ez da beti gertatzen
-  ",
-  0,
-  4723,
-  ymd("1995-06-02") + weeks(30),
-  11,
-  "Liburuan oinarritutako 1995eko ekaineko filmak<br />liburuaren salmentak piztu zituen",
-  0,
-  3343,
-  ymd("1990-05-01") + weeks(2),
-  -1 ,
-  "Liburua zerrendan agertu eta lehen postua lortu arte igarotako aste kopurua",
-  0,
-  3343,
-  ymd("1997-01-01"),
-  3,
-  "Top 5",
-  1
+  Baina ez da beti gertatzen", 0,
+  4723, ymd("1995-06-02") + weeks(30), 11, "Liburuan oinarritutako 1995eko ekaineko filmak<br />liburuaren salmentak piztu zituen", 0,
+  3343, ymd("1990-05-01") + weeks(2), -1 ,  "Liburua zerrendan agertu eta lehen postua lortu arte igarotako aste kopurua", 0,
+  3343, ymd("1997-01-01"), 3, "Top 5", 1
 )
 
 oharren_geziak <- tribble(
-  ~ id_f,
-  ~ x,
-  ~ xend,
-  ~ y,
-  ~ yend,
-  ~ curvature,
-  7239,
-  ymd("2022-09-01") + weeks(30),
-  ymd("2022-07-15"),
-  1,
-  6,
-  0.2,
-  4723,
-  ymd("1995-06-02") + weeks(30),
-  ymd("1995-06-02"),
-  8,
-  7,
-  0.2,
-  3343,
-  ymd("1990-05-01") + weeks(2),
-  ymd("1990-04-01"),
-  -1 ,
-  0,
-  0.2,
-  3343,
-  ymd("1997-01-01"),
-  ymd("1997-02-01"),
-  3,
-  5,
-  -0.2
+  ~ id_f, ~ x, ~ xend, ~ y, ~ yend, ~ curvature,
+  7239, ymd("2022-09-01") + weeks(30), ymd("2022-07-15"), 1, 6, 0.2,
+  4723, ymd("1995-06-02") + weeks(30), ymd("1995-06-02"), 8, 7, 0.2,
+  3343, ymd("1990-05-01") + weeks(2),  ymd("1990-04-01"), -1 , 0, 0.2,
+  3343, ymd("1997-01-01"), ymd("1997-02-01"), 3, 5, -0.2
 )
 
 ###################################################
@@ -428,7 +382,7 @@ nagusia <- ggplot(data = liburuak_top10_astero_all,
   # liburuaren azala
   geom_richtext(
     data = ~ filter(.x, iragazteko == 1),
-    aes(x = as.Date(-Inf), # first_week - weeks(28),
+    aes(x = as.Date(-Inf),
         y = 8,
         label = azala),
     hjust = 0,
@@ -481,13 +435,7 @@ nagusia <- ggplot(data = liburuak_top10_astero_all,
     aes(
       x = first_week - weeks(50),
       y = -5.5,
-      label = paste0(
-        "**",
-        stringr::str_to_title(title),
-        "** (",
-        total_weeks ,
-        " aste zerrendan)"
-      ),
+      label = paste0("**", stringr::str_to_title(title), "** (", total_weeks, " aste zerrendan)"),
       color = kolorea
     ),
     family = "Lora",
@@ -512,7 +460,7 @@ nagusia <- ggplot(data = liburuak_top10_astero_all,
   # lehen aldiz lehen postuan (atzeko zirkulua)
   geom_point(
     data = ~ filter(.x, iragazteko == 1),
-    aes(x = lehen_1,
+    aes(x = lehen_1, 
         y = 1),
     size = 8,
     color = "black",
@@ -559,13 +507,40 @@ nagusia <- ggplot(data = liburuak_top10_astero_all,
     fill = NA,
     label.color = NA
   ) +
-  geom_richtext(data = oharrak,
-               aes(week, rank, label = testua, hjust = hjust),
-               size = 4.5, color = "#101010", fill = NA, label.colour = NA) +
-  geom_curve(data = filter(oharren_geziak, curvature == 0.2), 
-             aes(x = x, xend = xend, y = y, yend = yend), curvature = 0.2, arrow = arrow(length = unit(0.03, "npc"))) +
-  geom_curve(data = filter(oharren_geziak, curvature == -0.2), 
-             aes(x = x, xend = xend, y = y, yend = yend), curvature = -0.2, arrow = arrow(length = unit(0.03, "npc"))) +
+  # oharrak
+  geom_richtext(
+    data = oharrak,
+    aes(week, rank, label = testua, hjust = hjust),
+    size = 4.5,
+    color = "#101010",
+    fill = NA,
+    label.colour = NA
+  ) +
+  # oharren geziak (ezkerrera)
+  geom_curve(
+    data = filter(oharren_geziak, curvature == 0.2),
+    aes(
+      x = x,
+      xend = xend,
+      y = y,
+      yend = yend
+    ),
+    curvature = 0.2,
+    arrow = arrow(length = unit(0.03, "npc"))
+  ) +
+  # oharren geziak (eskuinera)
+  geom_curve(
+    data = filter(oharren_geziak, curvature == -0.2),
+    aes(
+      x = x,
+      xend = xend,
+      y = y,
+      yend = yend
+    ),
+    curvature = -0.2,
+    arrow = arrow(length = unit(0.03, "npc"))
+  ) +
+  # testuak
   labs(title = "NYTeko liburu salduenen zerrendan<br />aste gehien azaldu diren 10 liburuak",
        subtitle = "Dr. Seussen ***<span style='color: #3dc9c6'>Oh, the Places you'll go</span>*** da zerrendan aste gehien agertu den liburua.
         Baina zerrendako beste liburuek<br />ez bezalako patroia erakusten du: 
@@ -574,8 +549,7 @@ nagusia <- ggplot(data = liburuak_top10_astero_all,
        zerrendan lehen aldiz agertu eta hamar urte bitarteko epera zabaldu da.",
        caption = "#tidytuesday 2022-19 | Datuak: Post45 Data | Datu gehigarriak eta irudiak: Wikipedia | Diseinua: Mikel Madina @neregauzak") +
   
-  # ranking-a denez, Y ardatza goitik behera jarri, eta 5. postuari dagokion marra gehitu
-  # labs(title = "NYTeko liburu salduenen zerrendan aste gehien agertu diren 10 liburuak", subtitle = "NYTeko liburu salduenen zerrendan aste gehien agertu diren 10 liburuak") +
+  # ranking-a denez, Y ardatza goitik behera jarri, eta 5. tokiari dagokion marra gehitu
   scale_y_reverse(
     limits = c(16, -8),
     expand = c(0, 0),
