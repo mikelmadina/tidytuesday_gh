@@ -1,4 +1,8 @@
+.Rproj
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
+.psd
+**/ignorar*
+**/temp
