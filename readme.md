@@ -1,3 +1,9 @@
+### 2022-20 Eurovision
+
+NOTA: la maquetación final está hecha con Inkscape.
+
+![](2022-05-17_Eurovision/composicion.svg)
+
 ### 2022-19 NYT-en liburu salduenen zerrenda
 
 ![](2022-05-10-nyt_bestsellers/nagusia_1250x1769.png)
