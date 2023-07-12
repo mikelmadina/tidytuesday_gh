@@ -222,7 +222,7 @@ votos_total <- votes_2022 %>%
   ungroup %>%
   arrange(desc(total)) %>%
   mutate(ranking = row_number())
-  
+
 votos_j <- votes_2022 %>%
   filter(jury_or_televoting == "J") %>%
   group_by(to) %>%
@@ -326,6 +326,14 @@ bump_tele <- votos_total %>%
   arrange(desc(total)) %>% 
   mutate(y = row_number())
 
+# asier <- bump_jury %>% 
+#   select(to, iso2, y) %>% 
+#   left_join(bump_tele, by = c("to", "iso2")) %>% 
+#   mutate(diff = y.x - yend) %>% 
+#   arrange(diff) %>% 
+#   ggplot(aes(diff, fct_reorder(iso2, diff))) +
+#            geom_col()
+
 # Gráficos
 
 fun_color_range_j <- colorRampPalette(c("#f5911f", "darkorange4"))
@@ -409,6 +417,8 @@ difieren_TJ  <- coinc_dif %>%
   filter(difieren == TRUE & diferencia == 12 & T == 12) %>% 
   select(De, A, J, T) %>% 
   arrange(J, De)
+
+
 
 # Gráficos
 
