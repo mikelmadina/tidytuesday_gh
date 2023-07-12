@@ -1,3 +1,7 @@
+### 2023-28 Global Surface Temperatures
+
+![](2023-07-11_temperatures/plot.png)
+
 ### 2022-20 Eurovision
 
 NOTA: la maquetación final está hecha con Inkscape.
